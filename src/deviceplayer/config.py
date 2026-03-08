@@ -48,9 +48,34 @@ def _manifest_from_portal_storage_config(config_path_raw: str) -> Path | None:
     return None
 
 
+def _manifest_from_player_source(config_path_raw: str) -> Path | None:
+    config_path = Path(config_path_raw).expanduser()
+    if not config_path.exists():
+        return None
+    try:
+        payload = json.loads(config_path.read_text(encoding='utf-8'))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    manifest_info = payload.get('manifest') if isinstance(payload.get('manifest'), dict) else {}
+    manifest_path = str(manifest_info.get('path') or payload.get('manifest_path') or '').strip()
+    if not manifest_path:
+        return None
+    return Path(manifest_path)
+
+
 def _resolve_manifest_path(manifest_path: str | None = None) -> Path:
     if manifest_path:
         return Path(manifest_path).expanduser().resolve()
+
+    # SSOT handover file from DevicePortal.
+    portal_source = os.getenv('DEVICEPLAYER_PORTAL_PLAYER_SOURCE', '').strip()
+    if portal_source:
+        resolved = _manifest_from_player_source(portal_source)
+        if resolved is not None:
+            return resolved.expanduser().resolve()
 
     # SSOT: the DevicePortal storage config defines where stream/current lives.
     portal_storage_cfg = os.getenv('DEVICEPLAYER_PORTAL_STORAGE_CONFIG', '').strip()

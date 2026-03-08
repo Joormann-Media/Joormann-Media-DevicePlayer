@@ -36,13 +36,14 @@ sudo systemctl status joormann-media-deviceplayer.service
 ```
 
 Manifest-Auflösung (Reihenfolge):
-1. `DEVICEPLAYER_PORTAL_STORAGE_CONFIG` (Single Source of Truth)
-2. `DEVICEPLAYER_STORAGE_ROOT`
-3. `DEVICEPLAYER_MANIFEST_PATH` (Legacy-Fallback)
-4. Fallback: `/mnt/deviceportal/media/stream/current/manifest.json`
+1. `DEVICEPLAYER_PORTAL_PLAYER_SOURCE` (Portal-Handover-Datei mit `manifest.path`)
+2. `DEVICEPLAYER_PORTAL_STORAGE_CONFIG` (Storage-SSOT)
+3. `DEVICEPLAYER_STORAGE_ROOT`
+4. `DEVICEPLAYER_MANIFEST_PATH` (Legacy-Fallback)
+5. Fallback: `/mnt/deviceportal/media/stream/current/manifest.json`
 
 Empfehlung: `DEVICEPLAYER_MANIFEST_PATH` und `DEVICEPLAYER_STORAGE_ROOT` leer lassen,
-nur `DEVICEPLAYER_PORTAL_STORAGE_CONFIG` setzen.
+`DEVICEPLAYER_PORTAL_PLAYER_SOURCE` plus `DEVICEPLAYER_PORTAL_STORAGE_CONFIG` setzen.
 
 Empfohlene Runtime-Parameter (für Signage-Dauerbetrieb):
 - `DEVICEPLAYER_TRANSITION_FPS=30`
