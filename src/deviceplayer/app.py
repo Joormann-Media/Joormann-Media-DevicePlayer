@@ -100,7 +100,8 @@ class DevicePlayerApp:
                 if event.type == pygame.QUIT:
                     self.running = False
 
-            if now >= self._last_reload_at + self.config.poll_reload_seconds:
+            # Avoid stutter: defer manifest polling/reload while a transition is actively rendering.
+            if transition_from is None and now >= self._last_reload_at + self.config.poll_reload_seconds:
                 self._last_reload_at = now
                 should_reload = plan is None
                 try:
