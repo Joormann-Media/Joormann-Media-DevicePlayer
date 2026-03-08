@@ -143,7 +143,8 @@ class DevicePlayerApp:
                 self._idle_wait(now, next_switch_at, in_transition=False)
                 continue
 
-            if current_frame is None or now >= next_switch_at:
+            # Never advance playlist while a transition is active.
+            if transition_from is None and (current_frame is None or now >= next_switch_at):
                 try:
                     item = cursor.next()
                 except Exception as exc:
