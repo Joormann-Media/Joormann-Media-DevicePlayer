@@ -115,7 +115,12 @@ class DevicePlayerApp:
                     try:
                         if plan is not None:
                             self.log.info('manifest changed -> reload')
-                        plan = self._load_plan_or_raise(self.config.manifest_path)
+                        loaded_plan = self._load_plan_or_raise(self.config.manifest_path)
+                        if plan is not None and self._is_same_plan(plan, loaded_plan):
+                            plan = loaded_plan
+                            continue
+
+                        plan = loaded_plan
                         renderer.clear_caches()
                         self._frame_cache.clear()
                         self._black_frame = None
@@ -160,11 +165,11 @@ class DevicePlayerApp:
                 transition = self._effective_transition(transition, transition_context)
                 will_transition = current_frame is not None and self._has_active_transition(transition_context)
 
-                # durationMs is treated as full slot duration (hold + transition).
-                # Keep a minimal visible hold to avoid immediate re-trigger loops on tiny durations.
-                hold_ms = duration_ms - (int(transition.get('ms') or 0) if will_transition else 0)
-                hold_ms = max(100, hold_ms)
-                next_switch_at = now + (hold_ms / 1000.0)
+                # durationMs is pure stand/hold time.
+                # Timer starts after transition has fully completed.
+                hold_ms = max(100, duration_ms)
+                transition_ms = int(transition.get('ms') or 0) if will_transition else 0
+                next_switch_at = now + ((transition_ms + hold_ms) / 1000.0)
 
                 if will_transition:
                     transition_from = current_frame
@@ -221,6 +226,13 @@ class DevicePlayerApp:
         self._last_manifest_mtime = manifest_path.stat().st_mtime
         self.log.info('loaded manifest %s version=%s items=%s', manifest_path, plan.get('version', ''), len(plan.get('playlist', [])))
         return plan
+
+    def _is_same_plan(self, old_plan: dict, new_plan: dict) -> bool:
+        old_version = str(old_plan.get('version') or '').strip()
+        new_version = str(new_plan.get('version') or '').strip()
+        if old_version and new_version:
+            return old_version == new_version
+        return old_plan == new_plan
 
     def _get_black_frame(self, renderer: FrameRenderer) -> pygame.Surface:
         if self._black_frame is None:
