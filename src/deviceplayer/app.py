@@ -47,8 +47,8 @@ class DevicePlayerApp:
         clock = pygame.time.Clock()
 
         renderer = FrameRenderer(screen.get_size())
-        plan = self._load_plan_or_raise(self.config.manifest_path)
-        cursor = PlaylistCursor(plan['playlist'])
+        plan: dict | None = None
+        cursor: PlaylistCursor | None = None
 
         current_frame = None
         next_switch_at = 0.0
@@ -64,18 +64,36 @@ class DevicePlayerApp:
 
             if now >= self._last_reload_at + self.config.poll_reload_seconds:
                 self._last_reload_at = now
+                should_reload = plan is None
                 try:
                     stat = self.config.manifest_path.stat()
                     if stat.st_mtime > self._last_manifest_mtime:
-                        self.log.info('manifest changed -> reload')
+                        should_reload = True
+                except FileNotFoundError:
+                    should_reload = True
+
+                if should_reload:
+                    try:
+                        if plan is not None:
+                            self.log.info('manifest changed -> reload')
                         plan = self._load_plan_or_raise(self.config.manifest_path)
                         cursor = PlaylistCursor(plan['playlist'])
                         current_frame = None
                         next_switch_at = 0.0
-                except FileNotFoundError:
-                    pass
-                except ManifestError as exc:
-                    self.log.error('manifest reload failed: %s', exc)
+                    except ManifestError as exc:
+                        if plan is not None:
+                            self.log.error('manifest reload failed: %s', exc)
+                        plan = None
+                        cursor = None
+
+            if plan is None or cursor is None:
+                if current_frame is None:
+                    current_frame = pygame.Surface((renderer.screen_w, renderer.screen_h)).convert()
+                    current_frame.fill((0, 0, 0))
+                screen.blit(current_frame, (0, 0))
+                pygame.display.flip()
+                clock.tick(self.config.fps)
+                continue
 
             if current_frame is None or now >= next_switch_at:
                 try:

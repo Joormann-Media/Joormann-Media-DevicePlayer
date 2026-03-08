@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,8 +17,59 @@ class PlayerConfig:
     log_level: str
 
 
+def _manifest_from_portal_storage_config(config_path_raw: str) -> Path | None:
+    config_path = Path(config_path_raw).expanduser()
+    if not config_path.exists():
+        return None
+    try:
+        payload = json.loads(config_path.read_text(encoding='utf-8'))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    rel = Path('stream/current/manifest.json')
+    internal = payload.get('internal') if isinstance(payload.get('internal'), dict) else {}
+    if bool(internal.get('allow_media_storage', True)):
+        mount_path = str(internal.get('mount_path') or '').strip()
+        if mount_path:
+            return Path(mount_path) / rel
+
+    devices = payload.get('devices') if isinstance(payload.get('devices'), list) else []
+    for item in devices:
+        if not isinstance(item, dict):
+            continue
+        if not bool(item.get('allow_media_storage', False)):
+            continue
+        mount_path = str(item.get('mount_path') or '').strip()
+        if mount_path:
+            return Path(mount_path) / rel
+    return None
+
+
+def _resolve_manifest_path(manifest_path: str | None = None) -> Path:
+    if manifest_path:
+        return Path(manifest_path).expanduser().resolve()
+
+    explicit = os.getenv('DEVICEPLAYER_MANIFEST_PATH', '').strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+
+    storage_root = os.getenv('DEVICEPLAYER_STORAGE_ROOT', '').strip()
+    if storage_root:
+        return (Path(storage_root).expanduser() / 'stream/current/manifest.json').resolve()
+
+    portal_storage_cfg = os.getenv('DEVICEPLAYER_PORTAL_STORAGE_CONFIG', '').strip()
+    if portal_storage_cfg:
+        resolved = _manifest_from_portal_storage_config(portal_storage_cfg)
+        if resolved is not None:
+            return resolved.expanduser().resolve()
+
+    return Path('/mnt/deviceportal/media/stream/current/manifest.json').resolve()
+
+
 def build_config(manifest_path: str | None = None) -> PlayerConfig:
-    path = manifest_path or os.getenv('DEVICEPLAYER_MANIFEST_PATH', '/mnt/deviceportal/media/stream/current/manifest.json')
+    path = _resolve_manifest_path(manifest_path)
     fullscreen = os.getenv('DEVICEPLAYER_FULLSCREEN', '1').strip().lower() in {'1', 'true', 'yes', 'on'}
     width = int(os.getenv('DEVICEPLAYER_WIDTH', '1920'))
     height = int(os.getenv('DEVICEPLAYER_HEIGHT', '1080'))
@@ -26,7 +78,7 @@ def build_config(manifest_path: str | None = None) -> PlayerConfig:
     level = os.getenv('DEVICEPLAYER_LOG_LEVEL', 'INFO')
 
     return PlayerConfig(
-        manifest_path=Path(path).expanduser().resolve(),
+        manifest_path=path,
         fullscreen=fullscreen,
         window_width=width,
         window_height=height,
