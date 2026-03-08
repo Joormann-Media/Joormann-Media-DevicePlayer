@@ -1,0 +1,28 @@
+{
+  "layout": {
+    "mode": "split",
+    "orientation": "portrait",
+    "direction": "vertical",
+    "ratioA": 50
+  },
+  "defaults": {
+    "durationMs": 10000,
+    "transition": {
+      "type": "slide-left",
+      "ms": 1200
+    }
+  },
+  "assets": {
+    "asset1": "assets/demo_top.webp",
+    "asset2": "assets/demo_bottom.webp"
+  },
+  "playlist": [
+    {
+      "zones": {
+        "A": { "asset": "asset1", "title": "Top" },
+        "B": { "asset": "asset2", "title": "Bottom" }
+      }
+    }
+  ],
+  "version": "example-v1"
+}

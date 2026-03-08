@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pygame
+
+
+class FrameRenderer:
+    def __init__(self, screen_size: tuple[int, int]):
+        self.screen_w, self.screen_h = screen_size
+        self._cache: dict[str, pygame.Surface] = {}
+
+    def resolve_asset_path(self, manifest_dir: Path, asset_ref: str) -> Path:
+        raw = Path(str(asset_ref))
+        if raw.is_absolute() and raw.exists():
+            return raw
+        return (manifest_dir / raw).resolve()
+
+    def load_image(self, path: Path) -> pygame.Surface:
+        key = str(path)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+        image = pygame.image.load(key).convert()
+        self._cache[key] = image
+        return image
+
+    def _fit(self, image: pygame.Surface, target_size: tuple[int, int]) -> pygame.Surface:
+        tw, th = target_size
+        iw, ih = image.get_size()
+        if iw <= 0 or ih <= 0 or tw <= 0 or th <= 0:
+            return pygame.Surface((max(tw, 1), max(th, 1))).convert()
+
+        scale = min(tw / iw, th / ih)
+        nw = max(1, int(iw * scale))
+        nh = max(1, int(ih * scale))
+        scaled = pygame.transform.smoothscale(image, (nw, nh))
+        canvas = pygame.Surface((tw, th)).convert()
+        canvas.fill((0, 0, 0))
+        canvas.blit(scaled, ((tw - nw) // 2, (th - nh) // 2))
+        return canvas
+
+    def render_full(self, image: pygame.Surface, orientation: str) -> pygame.Surface:
+        frame = self._fit(image, (self.screen_w, self.screen_h))
+        return self._orient(frame, orientation)
+
+    def render_split(self, image_a: pygame.Surface | None, image_b: pygame.Surface | None, direction: str, ratio_a: int, orientation: str) -> pygame.Surface:
+        frame = pygame.Surface((self.screen_w, self.screen_h)).convert()
+        frame.fill((0, 0, 0))
+
+        if direction == 'vertical':
+            a_h = int(self.screen_h * (ratio_a / 100.0))
+            b_h = self.screen_h - a_h
+            if image_a is not None and a_h > 0:
+                part = self._fit(image_a, (self.screen_w, a_h))
+                frame.blit(part, (0, 0))
+            if image_b is not None and b_h > 0:
+                part = self._fit(image_b, (self.screen_w, b_h))
+                frame.blit(part, (0, a_h))
+        else:
+            a_w = int(self.screen_w * (ratio_a / 100.0))
+            b_w = self.screen_w - a_w
+            if image_a is not None and a_w > 0:
+                part = self._fit(image_a, (a_w, self.screen_h))
+                frame.blit(part, (0, 0))
+            if image_b is not None and b_w > 0:
+                part = self._fit(image_b, (b_w, self.screen_h))
+                frame.blit(part, (a_w, 0))
+
+        return self._orient(frame, orientation)
+
+    def _orient(self, frame: pygame.Surface, orientation: str) -> pygame.Surface:
+        is_portrait_target = str(orientation).lower() == 'portrait'
+        screen_is_portrait = self.screen_h >= self.screen_w
+        if is_portrait_target == screen_is_portrait:
+            return frame
+        rotated = pygame.transform.rotate(frame, 90)
+        return pygame.transform.smoothscale(rotated, (self.screen_w, self.screen_h))

@@ -1,0 +1,20 @@
+[Unit]
+Description=Joormann Media DevicePlayer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=djanebmb
+Group=djanebmb
+WorkingDirectory=/home/djanebmb/projects/Joormann-Media-DevicePlayer
+Environment=PYTHONUNBUFFERED=1
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=SDL_AUDIODRIVER=dummy
+Environment=DEVICEPLAYER_MANIFEST_PATH=/mnt/deviceportal/media/stream/current/manifest.json
+ExecStart=/home/djanebmb/projects/Joormann-Media-DevicePlayer/.venv/bin/python /home/djanebmb/projects/Joormann-Media-DevicePlayer/run.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

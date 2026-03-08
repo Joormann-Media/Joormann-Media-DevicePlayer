@@ -1,0 +1,23 @@
+{
+  "layout": {
+    "mode": "full",
+    "orientation": "landscape"
+  },
+  "defaults": {
+    "durationMs": 10000,
+    "transition": {
+      "type": "crossfade",
+      "ms": 1000
+    }
+  },
+  "assets": {
+    "asset1": "assets/demo.jpg"
+  },
+  "playlist": [
+    {
+      "asset": "asset1",
+      "title": "Demo"
+    }
+  ],
+  "version": "runtime-demo"
+}
