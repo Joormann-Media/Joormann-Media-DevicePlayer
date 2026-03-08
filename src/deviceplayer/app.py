@@ -241,8 +241,8 @@ class DevicePlayerApp:
             key_b = str(zone_b.get('asset') or '')
             ref_a = str(assets.get(key_a) or '')
             ref_b = str(assets.get(key_b) or '')
-            direction = str(layout.get('direction') or 'horizontal').lower()
-            ratio = int(layout.get('ratioA') or 50)
+            direction = 'horizontal'
+            ratio = 50
             return f'split|{direction}|{ratio}|{ref_a}|{ref_b}'
 
         asset_key = str(item.get('asset') or '')
@@ -286,8 +286,8 @@ class DevicePlayerApp:
             frame = renderer.render_split(
                 img_a,
                 img_b,
-                str(layout.get('direction') or 'horizontal').lower(),
-                int(layout.get('ratioA') or 50),
+                'horizontal',
+                50,
             )
             self._frame_cache[cache_key] = frame
             return frame
@@ -374,25 +374,16 @@ class DevicePlayerApp:
         return can_animate(t) and ms > 0
 
     def _render_split_zone_transition(self, renderer: FrameRenderer, plan: dict, old_item: dict, new_item: dict, elapsed_s: float, zones: dict) -> pygame.Surface:
-        layout = plan.get('layout') if isinstance(plan.get('layout'), dict) else {}
-        direction = str(layout.get('direction') or 'horizontal').lower()
-        ratio = max(1, min(99, int(layout.get('ratioA') or 50)))
         manifest_dir = self.config.manifest_path.parent
         assets = plan.get('assets') if isinstance(plan.get('assets'), dict) else {}
 
         old_zones = old_item.get('zones') if isinstance(old_item.get('zones'), dict) else {}
         new_zones = new_item.get('zones') if isinstance(new_item.get('zones'), dict) else {}
 
-        if direction == 'vertical':
-            a_size = (renderer.screen_w, int(renderer.screen_h * (ratio / 100.0)))
-            b_size = (renderer.screen_w, renderer.screen_h - a_size[1])
-            a_pos = (0, 0)
-            b_pos = (0, a_size[1])
-        else:
-            a_size = (int(renderer.screen_w * (ratio / 100.0)), renderer.screen_h)
-            b_size = (renderer.screen_w - a_size[0], renderer.screen_h)
-            a_pos = (0, 0)
-            b_pos = (a_size[0], 0)
+        a_size = (renderer.screen_w // 2, renderer.screen_h)
+        b_size = (renderer.screen_w - a_size[0], renderer.screen_h)
+        a_pos = (0, 0)
+        b_pos = (a_size[0], 0)
 
         frame = pygame.Surface((renderer.screen_w, renderer.screen_h)).convert()
         frame.fill((0, 0, 0))

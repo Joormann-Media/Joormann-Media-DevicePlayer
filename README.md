@@ -6,8 +6,8 @@ Eigenständiger HDMI-Player für kompakte Runtime-Manifeste aus dem Adminpanel.
 
 - `layout.mode`: `full` | `split`
 - `layout.orientation`: wird vom Player ignoriert (Assets sind serverseitig bereits vorbereitet)
-- `layout.direction`: `horizontal` | `vertical` (bei split)
-- `layout.ratioA`: 1..99 (bei split)
+- `layout.direction`: wird vom Player ignoriert (Split ist fix links/rechts)
+- `layout.ratioA`: wird vom Player ignoriert (Split ist fix 50/50)
 - `defaults.durationMs`
 - `defaults.transition.type`:
   - nativ: `none` | `crossfade` | `slide-left` | `slide-right` | `slide-up` | `slide-down`

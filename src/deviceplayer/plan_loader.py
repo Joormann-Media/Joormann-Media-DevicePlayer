@@ -46,12 +46,9 @@ def load_manifest(path: Path) -> dict:
     if mode not in {'full', 'split'}:
         raise ManifestError('layout.mode must be full or split')
 
-    direction = str(layout.get('direction') or 'horizontal').strip().lower()
-    if direction not in {'vertical', 'horizontal'}:
-        direction = 'horizontal'
-
-    ratio_a = int(layout.get('ratioA') or 50)
-    ratio_a = max(1, min(99, ratio_a))
+    # Player-side split is fixed to 50/50 left-right.
+    direction = 'horizontal'
+    ratio_a = 50
 
     duration_ms = int(defaults.get('durationMs') or 10000)
     duration_ms = max(1000, duration_ms)
