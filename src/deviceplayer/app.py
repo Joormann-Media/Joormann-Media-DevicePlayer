@@ -153,13 +153,19 @@ class DevicePlayerApp:
 
                 new_frame = self._render_item(renderer, plan, item)
                 duration_ms = int(item.get('durationMs') or plan['defaults']['durationMs'])
-                next_switch_at = now + (duration_ms / 1000.0)
 
                 transition = self._resolve_transition(item, plan, duration_ms)
                 transition_context = self._build_transition_context(plan, current_item, item, transition)
                 transition = self._effective_transition(transition, transition_context)
+                will_transition = current_frame is not None and self._has_active_transition(transition_context)
 
-                if current_frame is not None and self._has_active_transition(transition_context):
+                # durationMs is treated as full slot duration (hold + transition).
+                # Keep a minimal visible hold to avoid immediate re-trigger loops on tiny durations.
+                hold_ms = duration_ms - (int(transition.get('ms') or 0) if will_transition else 0)
+                hold_ms = max(100, hold_ms)
+                next_switch_at = now + (hold_ms / 1000.0)
+
+                if will_transition:
                     transition_from = current_frame
                     transition_start = now
                     current_frame = new_frame
