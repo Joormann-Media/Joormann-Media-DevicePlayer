@@ -48,13 +48,19 @@ Manifest-Auflösung (Reihenfolge):
 4. `DEVICEPLAYER_MANIFEST_PATH` (Legacy-Fallback)
 5. Fallback: `/mnt/deviceportal/media/stream/current/manifest.json`
 
+Overlay-State-Auflösung (Reihenfolge):
+1. `DEVICEPLAYER_OVERLAY_STATE_PATH`
+2. Neben Manifest: `<manifest-dir>/overlay-state.json`
+
 Empfehlung: `DEVICEPLAYER_MANIFEST_PATH` und `DEVICEPLAYER_STORAGE_ROOT` leer lassen,
 `DEVICEPLAYER_PORTAL_PLAYER_SOURCE` plus `DEVICEPLAYER_PORTAL_STORAGE_CONFIG` setzen.
 
 Empfohlene Runtime-Parameter (für Signage-Dauerbetrieb):
 - `DEVICEPLAYER_TRANSITION_FPS=30`
+- `DEVICEPLAYER_OVERLAY_FPS=24`
 - `DEVICEPLAYER_IDLE_SLEEP_MS=200`
 - `DEVICEPLAYER_RELOAD_POLL_SECONDS=1.0`
+- `DEVICEPLAYER_OVERLAY_RELOAD_POLL_SECONDS=1.0`
 - optional: `DEVICEPLAYER_VIDEO_DRIVERS=kmsdrm,fbcon,wayland,x11`
 
 ## Lokaler Dateiaufbau
@@ -62,10 +68,39 @@ Empfohlene Runtime-Parameter (für Signage-Dauerbetrieb):
 Der Player erwartet lokal:
 - `manifest.json`
 - `assets/<dateien>`
+- optional: `overlay-state.json` (separates Runtime-Overlay)
 
 Das Device Portal schreibt atomar:
 - `<storage>/stream/staging/build-*/...`
 - danach Umschalten auf `<storage>/stream/current/...`
+- Overlay separat und atomar:
+  - `<storage>/stream/current/overlay-state.json`
+
+## Runtime Overlays
+
+Overlays laufen getrennt vom Manifest und blockieren die Playlist nicht.
+
+Unterstützt:
+- `flashMessages`: nacheinander rotierende Flash-Boxen
+- `tickers`: dauerhaft scrollende Ticker (top/bottom)
+- `popups`: nacheinander rotierende Popups
+
+Dateiformat (`overlay-state.json`, gekürzt):
+
+```json
+{
+  "updatedAt": "2026-03-10T17:00:00+01:00",
+  "flashMessages": [],
+  "tickers": [],
+  "popups": []
+}
+```
+
+Hinweise:
+- `enabled=false` wird ignoriert
+- ungültige Einträge werden defensiv übersprungen
+- kaputtes Overlay-JSON stoppt den Player nicht (letzter gültiger Zustand bleibt aktiv)
+- Overlay-Reload ist mtime-basiert und unabhängig vom Manifest-Reload
 
 ## Performance-Strategie
 

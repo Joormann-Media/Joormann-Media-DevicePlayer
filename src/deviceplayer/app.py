@@ -9,6 +9,9 @@ import pygame
 
 from .config import PlayerConfig
 from .logger import configure_logger
+from .overlay_loader import OverlayError, load_overlay_state
+from .overlay_renderer import OverlayRenderer
+from .overlay_runtime import OverlayRuntime
 from .plan_loader import ManifestError, load_manifest
 from .playlist import PlaylistCursor
 from .renderer import FrameRenderer
@@ -23,6 +26,8 @@ class DevicePlayerApp:
         self.running = True
         self._last_manifest_mtime = 0.0
         self._last_reload_at = 0.0
+        self._last_overlay_mtime = -1.0
+        self._last_overlay_reload_at = 0.0
         self._frame_cache: dict[str, pygame.Surface] = {}
         self._black_frame: pygame.Surface | None = None
 
@@ -82,6 +87,8 @@ class DevicePlayerApp:
         clock = pygame.time.Clock()
 
         renderer = FrameRenderer(screen.get_size())
+        overlay_renderer = OverlayRenderer(screen.get_size())
+        overlay_runtime = OverlayRuntime()
         plan: dict | None = None
         cursor: PlaylistCursor | None = None
 
@@ -92,6 +99,7 @@ class DevicePlayerApp:
         transition_start = 0.0
         transition_from = None
         transition_context = None
+        overlay_next_redraw_at = 0.0
         frame_dirty = True
 
         while self.running:
@@ -99,6 +107,35 @@ class DevicePlayerApp:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+
+            if now >= self._last_overlay_reload_at + self.config.overlay_poll_seconds:
+                self._last_overlay_reload_at = now
+                should_reload_overlay = False
+                try:
+                    stat = self.config.overlay_state_path.stat()
+                    if stat.st_mtime > self._last_overlay_mtime:
+                        should_reload_overlay = True
+                except FileNotFoundError:
+                    if self._last_overlay_mtime != 0.0:
+                        self._last_overlay_mtime = 0.0
+                        overlay_runtime.set_state(load_overlay_state(self.config.overlay_state_path), now)
+                        frame_dirty = True
+
+                if should_reload_overlay:
+                    try:
+                        state = load_overlay_state(self.config.overlay_state_path)
+                        overlay_runtime.set_state(state, now)
+                        self._last_overlay_mtime = self.config.overlay_state_path.stat().st_mtime
+                        frame_dirty = True
+                        self.log.info(
+                            "loaded overlay state %s flashes=%s tickers=%s popups=%s",
+                            self.config.overlay_state_path,
+                            len(state.flash_messages),
+                            len(state.tickers),
+                            len(state.popups),
+                        )
+                    except OverlayError as exc:
+                        self.log.warning("overlay reload failed: %s", exc)
 
             # Avoid stutter: defer manifest polling/reload while a transition is actively rendering.
             if transition_from is None and now >= self._last_reload_at + self.config.poll_reload_seconds:
@@ -124,6 +161,7 @@ class DevicePlayerApp:
                         renderer.clear_caches()
                         self._frame_cache.clear()
                         self._black_frame = None
+                        overlay_renderer.clear_caches()
                         cursor = PlaylistCursor(plan['playlist'])
                         current_frame = None
                         current_item = None
@@ -141,11 +179,23 @@ class DevicePlayerApp:
                 if current_frame is None:
                     current_frame = self._get_black_frame(renderer)
                     frame_dirty = True
-                if frame_dirty:
-                    screen.blit(current_frame, (0, 0))
+                overlay_frame = overlay_runtime.snapshot(now)
+                has_ticker = overlay_runtime.has_ticker()
+                if has_ticker:
+                    overlay_needs_redraw = True
+                else:
+                    overlay_needs_redraw = now >= overlay_next_redraw_at
+                    overlay_next_redraw_at = now + overlay_runtime.next_due_seconds(now)
+
+                composed = overlay_renderer.compose(current_frame, overlay_frame)
+                if frame_dirty or overlay_needs_redraw:
+                    screen.blit(composed, (0, 0))
                     pygame.display.flip()
                     frame_dirty = False
-                self._idle_wait(now, next_switch_at, in_transition=False)
+                if has_ticker:
+                    clock.tick(self.config.overlay_fps)
+                else:
+                    self._idle_wait(now, next_switch_at, in_transition=False, next_overlay_at=overlay_next_redraw_at)
                 continue
 
             # Never advance playlist while a transition is active.
@@ -207,16 +257,30 @@ class DevicePlayerApp:
                     else:
                         frame_to_show = render_transition(str(transition['type']), transition_from, current_frame, progress)
 
-            if frame_to_show is not None and (frame_dirty or in_transition):
-                screen.blit(frame_to_show, (0, 0))
+            overlay_frame = overlay_runtime.snapshot(now)
+            has_ticker = overlay_runtime.has_ticker()
+            if has_ticker:
+                overlay_needs_redraw = True
+            else:
+                overlay_needs_redraw = now >= overlay_next_redraw_at
+                overlay_next_redraw_at = now + overlay_runtime.next_due_seconds(now)
+
+            composed_frame = frame_to_show
+            if frame_to_show is not None:
+                composed_frame = overlay_renderer.compose(frame_to_show, overlay_frame)
+
+            if composed_frame is not None and (frame_dirty or in_transition or overlay_needs_redraw):
+                screen.blit(composed_frame, (0, 0))
                 pygame.display.flip()
                 if not in_transition:
                     frame_dirty = False
 
             if in_transition:
                 clock.tick(self.config.transition_fps)
+            elif has_ticker:
+                clock.tick(self.config.overlay_fps)
             else:
-                self._idle_wait(now, next_switch_at, in_transition=False)
+                self._idle_wait(now, next_switch_at, in_transition=False, next_overlay_at=overlay_next_redraw_at)
 
         pygame.quit()
         return 0
@@ -241,11 +305,15 @@ class DevicePlayerApp:
             self._black_frame = frame
         return self._black_frame
 
-    def _idle_wait(self, now: float, next_switch_at: float, in_transition: bool) -> None:
+    def _idle_wait(self, now: float, next_switch_at: float, in_transition: bool, next_overlay_at: float = 0.0) -> None:
         if in_transition:
             return
         reload_due = self._last_reload_at + self.config.poll_reload_seconds
+        overlay_reload_due = self._last_overlay_reload_at + self.config.overlay_poll_seconds
         next_due = min(reload_due, next_switch_at if next_switch_at > now else reload_due)
+        next_due = min(next_due, overlay_reload_due)
+        overlay_due = next_overlay_at if next_overlay_at > now else reload_due
+        next_due = min(next_due, overlay_due)
         sleep_s = max(0.0, next_due - now)
         sleep_ms = int(min(self.config.idle_sleep_ms, max(1, int(sleep_s * 1000))))
         pygame.time.wait(sleep_ms)

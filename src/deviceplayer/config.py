@@ -9,12 +9,15 @@ from pathlib import Path
 @dataclass(frozen=True)
 class PlayerConfig:
     manifest_path: Path
+    overlay_state_path: Path
     fullscreen: bool
     window_width: int
     window_height: int
     transition_fps: int
+    overlay_fps: int
     idle_sleep_ms: int
     poll_reload_seconds: float
+    overlay_poll_seconds: float
     log_level: str
 
 
@@ -98,21 +101,31 @@ def _resolve_manifest_path(manifest_path: str | None = None) -> Path:
 
 def build_config(manifest_path: str | None = None) -> PlayerConfig:
     path = _resolve_manifest_path(manifest_path)
+    overlay_explicit = os.getenv('DEVICEPLAYER_OVERLAY_STATE_PATH', '').strip()
+    if overlay_explicit:
+        overlay_path = Path(overlay_explicit).expanduser().resolve()
+    else:
+        overlay_path = (path.parent / 'overlay-state.json').resolve()
     fullscreen = os.getenv('DEVICEPLAYER_FULLSCREEN', '1').strip().lower() in {'1', 'true', 'yes', 'on'}
     width = int(os.getenv('DEVICEPLAYER_WIDTH', '1920'))
     height = int(os.getenv('DEVICEPLAYER_HEIGHT', '1080'))
     transition_fps = max(12, min(60, int(os.getenv('DEVICEPLAYER_TRANSITION_FPS', os.getenv('DEVICEPLAYER_FPS', '30')))))
+    overlay_fps = max(8, min(60, int(os.getenv('DEVICEPLAYER_OVERLAY_FPS', '24'))))
     idle_sleep_ms = max(20, min(2000, int(os.getenv('DEVICEPLAYER_IDLE_SLEEP_MS', '200'))))
     poll = float(os.getenv('DEVICEPLAYER_RELOAD_POLL_SECONDS', '1.0'))
+    overlay_poll = float(os.getenv('DEVICEPLAYER_OVERLAY_RELOAD_POLL_SECONDS', str(poll)))
     level = os.getenv('DEVICEPLAYER_LOG_LEVEL', 'INFO')
 
     return PlayerConfig(
         manifest_path=path,
+        overlay_state_path=overlay_path,
         fullscreen=fullscreen,
         window_width=width,
         window_height=height,
         transition_fps=transition_fps,
+        overlay_fps=overlay_fps,
         idle_sleep_ms=idle_sleep_ms,
         poll_reload_seconds=max(0.2, poll),
+        overlay_poll_seconds=max(0.2, overlay_poll),
         log_level=level,
     )
