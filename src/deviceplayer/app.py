@@ -82,12 +82,45 @@ class DevicePlayerApp:
 
         raise RuntimeError(f'failed to initialize SDL video backend ({candidates}): {last_error}')
 
+    @staticmethod
+    def _normalize_rotation(value: int) -> int:
+        try:
+            raw = int(value)
+        except Exception:
+            return 0
+        raw %= 360
+        if raw < 0:
+            raw += 360
+        return int((round(raw / 90.0) * 90) % 360)
+
+    def _apply_output_rotation(self, frame: pygame.Surface, rotation_degrees: int, target_size: tuple[int, int]) -> pygame.Surface:
+        if rotation_degrees % 360 == 0:
+            return frame
+
+        # pygame rotate: positive = counter-clockwise, config rotation is clockwise.
+        rotated = pygame.transform.rotate(frame, -rotation_degrees)
+        if rotated.get_size() == target_size:
+            return rotated
+        return pygame.transform.smoothscale(rotated, target_size)
+
     def run(self) -> int:
         screen = self._init_screen()
         clock = pygame.time.Clock()
+        output_size = screen.get_size()
+        output_rotation = self._normalize_rotation(self.config.display_rotation_degrees)
+        logical_size = output_size if output_rotation in (0, 180) else (output_size[1], output_size[0])
 
-        renderer = FrameRenderer(screen.get_size())
-        overlay_renderer = OverlayRenderer(screen.get_size())
+        self.log.info(
+            'display rotation=%s° logical=%sx%s output=%sx%s',
+            output_rotation,
+            logical_size[0],
+            logical_size[1],
+            output_size[0],
+            output_size[1],
+        )
+
+        renderer = FrameRenderer(logical_size)
+        overlay_renderer = OverlayRenderer(logical_size)
         overlay_runtime = OverlayRuntime()
         plan: dict | None = None
         cursor: PlaylistCursor | None = None
@@ -189,7 +222,8 @@ class DevicePlayerApp:
 
                 composed = overlay_renderer.compose(current_frame, overlay_frame)
                 if frame_dirty or overlay_needs_redraw:
-                    screen.blit(composed, (0, 0))
+                    output_frame = self._apply_output_rotation(composed, output_rotation, output_size)
+                    screen.blit(output_frame, (0, 0))
                     pygame.display.flip()
                     frame_dirty = False
                 if has_ticker:
@@ -270,7 +304,8 @@ class DevicePlayerApp:
                 composed_frame = overlay_renderer.compose(frame_to_show, overlay_frame)
 
             if composed_frame is not None and (frame_dirty or in_transition or overlay_needs_redraw):
-                screen.blit(composed_frame, (0, 0))
+                output_frame = self._apply_output_rotation(composed_frame, output_rotation, output_size)
+                screen.blit(output_frame, (0, 0))
                 pygame.display.flip()
                 if not in_transition:
                     frame_dirty = False

@@ -19,6 +19,7 @@ class PlayerConfig:
     poll_reload_seconds: float
     overlay_poll_seconds: float
     log_level: str
+    display_rotation_degrees: int
 
 
 def _manifest_from_portal_storage_config(config_path_raw: str) -> Path | None:
@@ -69,6 +70,30 @@ def _manifest_from_player_source(config_path_raw: str) -> Path | None:
     return Path(manifest_path)
 
 
+def _rotation_from_player_source(config_path_raw: str) -> int | None:
+    config_path = Path(config_path_raw).expanduser()
+    if not config_path.exists():
+        return None
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    display = payload.get("display") if isinstance(payload.get("display"), dict) else {}
+    raw = display.get("rotation_degrees")
+    if raw is None:
+        primary = display.get("primary_display") if isinstance(display.get("primary_display"), dict) else {}
+        raw = primary.get("rotation_degrees")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except Exception:
+        return None
+
+
 def _resolve_manifest_path(manifest_path: str | None = None) -> Path:
     if manifest_path:
         return Path(manifest_path).expanduser().resolve()
@@ -115,6 +140,19 @@ def build_config(manifest_path: str | None = None) -> PlayerConfig:
     poll = float(os.getenv('DEVICEPLAYER_RELOAD_POLL_SECONDS', '1.0'))
     overlay_poll = float(os.getenv('DEVICEPLAYER_OVERLAY_RELOAD_POLL_SECONDS', str(poll)))
     level = os.getenv('DEVICEPLAYER_LOG_LEVEL', 'INFO')
+    rotation_raw = os.getenv('DEVICEPLAYER_DISPLAY_ROTATION_DEGREES', '').strip()
+    rotation_degrees = 0
+    if rotation_raw != '':
+        try:
+            rotation_degrees = int(rotation_raw)
+        except Exception:
+            rotation_degrees = 0
+    else:
+        portal_source = os.getenv('DEVICEPLAYER_PORTAL_PLAYER_SOURCE', '').strip()
+        if portal_source:
+            derived = _rotation_from_player_source(portal_source)
+            if derived is not None:
+                rotation_degrees = derived
 
     return PlayerConfig(
         manifest_path=path,
@@ -128,4 +166,5 @@ def build_config(manifest_path: str | None = None) -> PlayerConfig:
         poll_reload_seconds=max(0.2, poll),
         overlay_poll_seconds=max(0.2, overlay_poll),
         log_level=level,
+        display_rotation_degrees=rotation_degrees,
     )
