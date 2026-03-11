@@ -107,12 +107,14 @@ class DevicePlayerApp:
         screen = self._init_screen()
         clock = pygame.time.Clock()
         output_size = screen.get_size()
-        output_rotation = self._normalize_rotation(self.config.display_rotation_degrees)
-        logical_size = output_size if output_rotation in (0, 180) else (output_size[1], output_size[0])
+        configured_rotation = self._normalize_rotation(self.config.display_rotation_degrees)
+        output_rotation = 0
+        logical_size = output_size
 
         self.log.info(
-            'display rotation=%s° logical=%sx%s output=%sx%s',
+            'display rotation=%s° (configured=%s°, ignored) logical=%sx%s output=%sx%s',
             output_rotation,
+            configured_rotation,
             logical_size[0],
             logical_size[1],
             output_size[0],
@@ -220,8 +222,7 @@ class DevicePlayerApp:
                     overlay_needs_redraw = now >= overlay_next_redraw_at
                     overlay_next_redraw_at = now + overlay_runtime.next_due_seconds(now)
 
-                rotated_base = self._apply_output_rotation(current_frame, output_rotation, output_size)
-                composed = overlay_renderer.compose(rotated_base, overlay_frame)
+                composed = overlay_renderer.compose(current_frame, overlay_frame)
                 if frame_dirty or overlay_needs_redraw:
                     screen.blit(composed, (0, 0))
                     pygame.display.flip()
@@ -301,8 +302,7 @@ class DevicePlayerApp:
 
             composed_frame = None
             if frame_to_show is not None:
-                rotated_base = self._apply_output_rotation(frame_to_show, output_rotation, output_size)
-                composed_frame = overlay_renderer.compose(rotated_base, overlay_frame)
+                composed_frame = overlay_renderer.compose(frame_to_show, overlay_frame)
 
             if composed_frame is not None and (frame_dirty or in_transition or overlay_needs_redraw):
                 screen.blit(composed_frame, (0, 0))
