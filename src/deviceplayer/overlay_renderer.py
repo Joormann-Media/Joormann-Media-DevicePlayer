@@ -112,6 +112,23 @@ class OverlayRenderer:
         if msg_s is not None:
             panel.blit(msg_s, (padding, cursor_y))
 
+        rotation = self._normalize_rotation(getattr(flash, "rotation", 0))
+        if rotation in (90, 270):
+            rotated = pygame.transform.rotate(panel, -rotation)
+            rw, rh = rotated.get_size()
+            y = (self.screen_h - rh) // 2
+            if flash.position == "top":
+                x = 24
+            elif flash.position == "bottom":
+                x = self.screen_w - rw - 24
+            else:
+                x = (self.screen_w - rw) // 2
+            surface.blit(rotated, (x, y))
+            return
+
+        if rotation == 180:
+            panel = pygame.transform.rotate(panel, -rotation)
+
         surface.blit(panel, (x, y))
 
     def _draw_popup(self, surface: pygame.Surface, popup) -> None:
